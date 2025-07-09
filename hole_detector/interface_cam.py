@@ -18,6 +18,11 @@ class InterfaceCam(QWidget):
         self.setGeometry(100, 100, 1200, 700)
         self.mode_process = False
 
+        # Webcam
+        self.cap = cv2.VideoCapture(0)
+        if not self.cap.isOpened():
+            raise Exception("Webcam non détectée")
+
         # Layout principal
         main_layout = QVBoxLayout(self)
         self.setLayout(main_layout)
@@ -117,20 +122,18 @@ class InterfaceCam(QWidget):
         self.selected_date_label.setText("Date sélectionnée : " + date.toString("dddd dd MMMM yyyy"))
 
     def update_video(self):
-        # Image verte simulant le flux caméra
-        frame = np.zeros((480, 640, 3), dtype=np.uint8)
-        frame[:] = (0, 255, 0)  # Vert
+        ret, frame = self.cap.read()
+        if ret:
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            h, w, ch = frame.shape
+            bytes_per_line = ch * w
+            image = QImage(frame.data, w, h, bytes_per_line, QImage.Format_RGB888)
+            scaled = image.scaled(620, 440, Qt.KeepAspectRatio)
 
-        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        h, w, ch = frame.shape
-        bytes_per_line = ch * w
-        image = QImage(frame.data, w, h, bytes_per_line, QImage.Format_RGB888)
-        scaled = image.scaled(620, 440, Qt.KeepAspectRatio)
-
-        self.cam1.update_frame(scaled)
-        self.cam2.update_frame(scaled)
-        self.cam3.update_frame(scaled)
-        self.cam4.update_frame(scaled)
+            self.cam1.update_frame(scaled)
+            self.cam2.update_frame(scaled)
+            self.cam3.update_frame(scaled)
+            self.cam4.update_frame(scaled)
 
     def open_login_dialog(self):
         dialog = AdminLoginDialog(self)
@@ -144,7 +147,7 @@ class InterfaceCam(QWidget):
             msg_box.exec_()
 
     def closeEvent(self, event):
-        # Rien à libérer puisque plus de webcam
+        self.cap.release()
         super().closeEvent(event)
 
     def ouvrir_fenetre_casse(self):
