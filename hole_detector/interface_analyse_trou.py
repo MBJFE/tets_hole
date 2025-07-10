@@ -8,12 +8,12 @@ from PyQt5.QtGui import QImage, QPixmap
 
 
 class VoirCasseWindow(QWidget):
-    def __init__(self):
+    def __init__(self, video_path):
         super().__init__()
         self.setWindowTitle("Détail de la casse")
         self.setGeometry(150, 150, 1000, 600)
 
-        # Simuler des vidéos de 5 secondes à 30 FPS
+        self.video_path = video_path  # ⬅️ ajout
         self.frames_cam1 = []
         self.frames_cam2 = []
         self.selected_frames = []
@@ -23,7 +23,8 @@ class VoirCasseWindow(QWidget):
         self.timer.timeout.connect(self.next_frame)
 
         self.init_ui()
-        self.load_dummy_video()
+        self.load_video_frames()  # ⬅️ utilise vraie vidéo
+
 
     def init_ui(self):
         main_layout = QHBoxLayout(self)
@@ -55,7 +56,7 @@ class VoirCasseWindow(QWidget):
 
         # Slider (curseur)
         self.slider = QSlider(Qt.Horizontal)
-        self.slider.setRange(0, 149)
+        self.slider.setRange(0, len(self.frames_cam1) - 1)
         self.slider.setValue(0)
         self.slider.sliderMoved.connect(self.slider_moved)
         right_layout.addWidget(self.slider)
@@ -116,7 +117,9 @@ class VoirCasseWindow(QWidget):
             image = self.convert_to_qimage(frame)
             pixmap = QPixmap.fromImage(image).scaled(self.main_video_label.size(), Qt.KeepAspectRatio)
             self.main_video_label.setPixmap(pixmap)
+            self.slider.blockSignals(True)
             self.slider.setValue(self.frame_index)
+            self.slider.blockSignals(False)
 
     def toggle_play(self):
         if self.timer.isActive():
@@ -140,5 +143,24 @@ class VoirCasseWindow(QWidget):
             self.show_current_frame()
 
     def slider_moved(self, value):
+        self.timer.stop()
         self.frame_index = value
         self.show_current_frame()
+
+    def load_video_frames(self):
+        cap = cv2.VideoCapture(self.video_path)
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
+            self.frames_cam1.append(frame)
+            self.frames_cam2.append(frame.copy())  # pour simuler cam2 si besoin
+
+        cap.release()
+
+        if self.frames_cam1:
+            self.slider.setRange(0, len(self.frames_cam1) - 1)
+            self.update_preview(self.cam1_preview, self.frames_cam1[0])
+            self.update_preview(self.cam2_preview, self.frames_cam2[0])
+            self.select_camera(1)
+

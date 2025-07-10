@@ -1,15 +1,19 @@
 import cv2
 import numpy as np
+import os
 from PyQt5.QtWidgets import (
     QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout,
     QCalendarWidget, QTableWidget, QTableWidgetItem, QGridLayout,
     QSplitter, QToolBar, QAction, QMessageBox
 )
+from PyQt5.QtCore import QThread, pyqtSignal
+
 from PyQt5.QtCore import QTimer, QDateTime, Qt
 from PyQt5.QtGui import QImage, QIcon
 from video_widget import VideoWidget
 from admin_login import AdminLoginDialog
 from interface_analyse_trou import VoirCasseWindow
+from video_saver import VideoSaverThread
 
 class InterfaceCam(QWidget):
     def __init__(self):
@@ -17,6 +21,11 @@ class InterfaceCam(QWidget):
         self.setWindowTitle("Interface Caméras")
         self.setGeometry(100, 100, 1200, 700)
         self.mode_process = False
+
+        # Buffer circulaire (10s à 30fps = 300 frames)
+        self.frame_buffer = []
+        self.buffer_max_size = 100  # 10s * 30 fps
+        self.fps = 30  # pour VideoWriter
 
         # Webcam
         self.cap = cv2.VideoCapture(0)
@@ -124,10 +133,16 @@ class InterfaceCam(QWidget):
     def update_video(self):
         ret, frame = self.cap.read()
         if ret:
-            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            h, w, ch = frame.shape
+            # Ajoute au buffer circulaire
+            if len(self.frame_buffer) >= self.buffer_max_size:
+                self.frame_buffer.pop(0)
+            self.frame_buffer.append(frame.copy())
+
+            # Affichage (convertir pour PyQt)
+            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            h, w, ch = rgb_frame.shape
             bytes_per_line = ch * w
-            image = QImage(frame.data, w, h, bytes_per_line, QImage.Format_RGB888)
+            image = QImage(rgb_frame.data, w, h, bytes_per_line, QImage.Format_RGB888)
             scaled = image.scaled(620, 440, Qt.KeepAspectRatio)
 
             self.cam1.update_frame(scaled)
@@ -151,6 +166,14 @@ class InterfaceCam(QWidget):
         super().closeEvent(event)
 
     def ouvrir_fenetre_casse(self):
-        self.fenetre_casse = VoirCasseWindow()
+        self.video_saver_thread = VideoSaverThread(self.cap, self.frame_buffer.copy(), self.fps)
+        self.video_saver_thread.finished.connect(self.afficher_fenetre_casse)
+        self.video_saver_thread.start()
+
+    def afficher_fenetre_casse(self, filepath):
+        self.fenetre_casse = VoirCasseWindow(filepath)
         self.fenetre_casse.show()
+
+
+
 
